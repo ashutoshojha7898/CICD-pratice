@@ -40,7 +40,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install Test Dependency
-        run: pip install pytest
+        run: pip install -r requirements.txt
 
       - name: Run Tests
         run: pytest -v
@@ -94,3 +94,43 @@ jobs:
           context: .
           push: true
           tags: ghcr.io/ashutoshojha7898/ci-cd-practice:${{ github.sha }}
+  
+  deploy:
+    runs-on: ubuntu-latest
+    needs: [docker-build]
+
+    permissions:
+      contents: read
+      packages: read
+
+    steps:
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull Docker Image
+        run: |
+          docker pull ghcr.io/ashutoshojha7898/ci-cd-practice:${{ github.sha }}
+
+      - name: Deploy Container
+        run: |
+          docker run -d \
+            --name ci-cd-app \
+            -p 5000:5000 \
+            ghcr.io/ashutoshojha7898/ci-cd-practice:${{ github.sha }}
+
+      - name: Verify Deployment
+        run: |
+          for i in {1..15}; do
+            if curl --fail http://localhost:5000/health; then
+              echo "Deployment successful"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Health check failed"
+          docker logs ci-cd-app
+          exit 1
